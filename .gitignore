@@ -6,3 +6,7 @@ spacemit-ime-build-*.log
 # Local configuration containing real host details. Never commit.
 .env
 **/.env
+
+# Machine-local Claude Code settings: contain absolute home paths and per-machine
+# tool approvals. Nothing here is portable and nothing here should be published.
+.claude/settings.local.json
