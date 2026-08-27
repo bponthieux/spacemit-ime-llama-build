@@ -1,0 +1,4 @@
+.env
+out/
+repo/
+spacemit-ime-build-*.log

@@ -1,0 +1,8 @@
+# Local build artifacts and logs
+spacemit-ime-build/out/
+spacemit-ime-build/repo/
+spacemit-ime-build-*.log
+
+# Local configuration containing real host details. Never commit.
+.env
+**/.env
