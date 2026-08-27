@@ -10,9 +10,26 @@ If you are here because you want IME-accelerated llama.cpp binaries for a K3 boa
 
 **In scope:** producing working IME-enabled RISC-V builds of llama.cpp, the toolchain and patches required to do so, benchmark numbers that characterize what this build achieves, and hardware/toolchain reference material needed to interpret those numbers.
 
-**Out of scope:** anything specific to one person's lab. No host names, IP addresses, usernames, SSH details, network topology, or private project planning. Target-host configuration lives in `spacemit-ime-build/.env`, which is git-ignored and must never be committed.
+**Out of scope:** anything specific to one person's lab. No host names, IP addresses, usernames, SSH details, network topology, or private project planning. Target-host configuration lives in `.env` at the repo root, which is git-ignored and must never be committed.
 
-If a change would only make sense to someone who owns a particular lab, it belongs in a private repo, not here.
+If a change would only make sense to someone who owns a particular lab, it belongs in a private repo, not here. See [`SCOPE.md`](SCOPE.md).
+
+## Repository layout
+
+```
+.env.example                     copy to .env and fill in your own target-host values
+spacemit-ime-build.sh            the orchestrator you run
+spacemit-ime-build/              <-- this folder is the docker build context
+    Dockerfile                   toolchain image definition
+    build-inside.sh              runs inside the container; COPYied in by the Dockerfile
+    out/                         build outputs (git-ignored)
+    repo/                        persistent llama.cpp checkout (git-ignored)
+docs/spacemit-k3-reference.md    hardware / ISA / core-targeting reference
+```
+
+**`Dockerfile` and `build-inside.sh` must stay inside `spacemit-ime-build/`.** `spacemit-ime-build.sh` runs `docker build "$WORKDIR"` with `WORKDIR=$SCRIPT_DIR/spacemit-ime-build`, so that folder *is* the build context. The Dockerfile's `COPY build-inside.sh /build-inside.sh` resolves relative to it, and neither file is visible to the build from anywhere else.
+
+**`.env` and `.env.example` must stay at the repo root**, because `spacemit-ime-build.sh` sources `"$SCRIPT_DIR/.env"`.
 
 ## Documentation
 
@@ -26,13 +43,13 @@ SpacemiT's stock Bianbu-distro `llama.cpp` package is built with a plain toolcha
 
 ## How it works
 
-- `Dockerfile` builds a `linux/amd64` Ubuntu 22.04 image with SpacemiT's official `v1.2.4` cross-toolchain and build dependencies baked in. Docker's layer cache makes rebuilds near-instant after the first run.
-- `build-inside.sh` runs inside that container: clones/updates `llama.cpp`, applies a small source patch (see below), configures and builds with CMake, and copies the resulting riscv64 binaries plus runtime shared libraries to a mounted `/out` directory.
+- `spacemit-ime-build/Dockerfile` builds a `linux/amd64` Ubuntu 22.04 image with SpacemiT's official `v1.2.4` cross-toolchain and build dependencies baked in. Docker's layer cache makes rebuilds near-instant after the first run.
+- `spacemit-ime-build/build-inside.sh` runs inside that container: clones/updates `llama.cpp`, applies a small source patch (see below), configures and builds with CMake, and copies the resulting riscv64 binaries plus runtime shared libraries to a mounted `/out` directory.
 - `spacemit-ime-build.sh` is the orchestrator you actually run: builds the Docker image, runs `build-inside.sh` inside it, then ships the binaries to the target K3 board over SSH, sanity-checks that they run, and runs the real benchmark on both core types.
 
 ## Usage
 
-1. Copy `spacemit-ime-build/.env.example` to `spacemit-ime-build/.env` and fill in your own target-host details (`JUP`, `SSH_KEY`, `MODEL_PATH`, `REMOTE_DIR`). This file is git-ignored and never committed.
+1. Copy `.env.example` to `.env` (both at the repo root) and fill in your own target-host details (`JUP`, `SSH_KEY`, `MODEL_PATH`, `REMOTE_DIR`). `.env` is git-ignored and never committed.
 2. Run:
 
 ```bash
@@ -101,6 +118,8 @@ Left unset, the binary defaults to preferring whichever core family has arch-id 
 ### If you are debugging this pipeline again, read this first
 
 Three of the eight items above were the *same visible symptom* with three different root causes, and item 3 was the fix being silently reverted by a stale cache. **Verify the file on disk (checksum or grep) before concluding a fix didn't work**, and have long-running scripts print their own checksum at the top of the log. If a symptom survives a fix you are confident in, suspect a *second* root cause rather than undoing the fix.
+
+A related failure mode worth knowing about: this repo was once re-created from scratch, and the copies of `build-inside.sh` and `Dockerfile` were restored to the repo root instead of into `spacemit-ime-build/`, with shell line continuations double-escaped (`\\` instead of `\`) in the process. Neither mistake is visible by reading the file casually, and both break the build in confusing ways. If the build fails immediately after any bulk file restore, check file *locations* and `bash -n` output before debugging anything about the toolchain.
 
 ## Development note
 
